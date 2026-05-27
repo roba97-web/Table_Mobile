@@ -1,8 +1,17 @@
-"""정원표 분석 결과 PDF (한글 폰트·비중·천단위 콤마)."""
+"""정원표 분석 결과 PDF (reportlab + TTF, Android 뷰어 호환)."""
 
 from __future__ import annotations
 
-from fpdf import FPDF
+import io
+from pathlib import Path
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Table, TableStyle
 
 from pdf_font import korean_font_path
 
@@ -10,6 +19,18 @@ FINAL_COLUMNS = ["구분", "총정원", "정무직", "고공단", "3·4급", "4�
 RANK_COLS = ["정무직", "고공단", "3·4급", "4급", "4.5급", "5급이하"]
 SUM_COLS = ["총정원", *RANK_COLS]
 PDF_FILE_NAME = "통합_정원표_분석결과.pdf"
+
+_FONT_NAME = "KoreanPDF"
+_FONT_REGISTERED = False
+
+
+def _register_font() -> None:
+    global _FONT_REGISTERED
+    if _FONT_REGISTERED:
+        return
+    font_path = korean_font_path()
+    pdfmetrics.registerFont(TTFont(_FONT_NAME, font_path))
+    _FONT_REGISTERED = True
 
 
 def _to_int(value) -> int:
@@ -32,7 +53,7 @@ def _format_share_text(count: int, total: int) -> str:
     if total <= 0:
         return _format_number(count)
     pct = count / total * 100
-    return f"{_format_number(count)} ({pct:.1f})"
+    return f"{_format_number(count)}<br/>({pct:.1f})"
 
 
 def _cell_text(col: str, row: dict) -> str:
@@ -44,56 +65,86 @@ def _cell_text(col: str, row: dict) -> str:
     return str(row.get(col, ""))
 
 
+def _para(text: str, *, bold: bool = False, size: int = 8) -> Paragraph:
+    style = ParagraphStyle(
+        name="Cell",
+        fontName=_FONT_NAME,
+        fontSize=size,
+        leading=size + 2,
+        alignment=1,
+        wordWrap="CJK",
+    )
+    if bold:
+        style = ParagraphStyle(
+            name="Head",
+            parent=style,
+            fontSize=size,
+            leading=size + 2,
+        )
+    raw = str(text).replace("&", "&amp;")
+    if "<br/>" in raw:
+        parts = raw.split("<br/>")
+        safe = "<br/>".join(p.replace("<", "&lt;").replace(">", "&gt;") for p in parts)
+    else:
+        safe = raw.replace("<", "&lt;").replace(">", "&gt;")
+    return Paragraph(safe, style)
+
+
 def build_result_pdf_bytes(columns: list[str], rows: list[dict]) -> bytes:
-    font_path = korean_font_path()
-
-    pdf = FPDF(orientation="L", unit="mm", format="A4")
-    pdf.set_margins(10, 10, 10)
-    pdf.set_auto_page_break(auto=True, margin=10)
-    pdf.add_page()
-    pdf.add_font("Korean", "", font_path)
-    pdf.set_font("Korean", size=11)
-    pdf.cell(0, 8, "통합 정원표 분석결과", new_x="LMARGIN", new_y="NEXT", align="C")
-    pdf.ln(2)
-    pdf.set_font("Korean", size=8)
-
-    n = len(columns)
-    if n == 0:
+    if not columns:
         raise ValueError("표 열이 없습니다.")
 
-    usable = pdf.epw
+    _register_font()
+
+    buf = io.BytesIO()
+    page_size = landscape(A4)
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=page_size,
+        leftMargin=10 * mm,
+        rightMargin=10 * mm,
+        topMargin=12 * mm,
+        bottomMargin=10 * mm,
+    )
+
+    title_style = ParagraphStyle(
+        name="Title",
+        fontName=_FONT_NAME,
+        fontSize=14,
+        leading=18,
+        alignment=1,
+        spaceAfter=6,
+    )
+    story = [Paragraph("통합 정원표 분석결과", title_style)]
+
     weights = [2.0 if col == "구분" else 1.0 for col in columns]
     wsum = sum(weights)
+    usable = page_size[0] - doc.leftMargin - doc.rightMargin
     col_widths = [usable * w / wsum for w in weights]
-    line_h = 7.0
 
-    def draw_row(cells: list[str]) -> None:
-        x0 = pdf.l_margin
-        y0 = pdf.get_y()
-        if y0 > 270:
-            pdf.add_page()
-            pdf.set_font("Korean", size=8)
-            y0 = pdf.get_y()
-
-        row_h = line_h
-        for i, text in enumerate(cells):
-            x = x0 + sum(col_widths[:i])
-            pdf.set_xy(x, y0)
-            pdf.multi_cell(col_widths[i], line_h, text, border=0, align="C")
-            row_h = max(row_h, pdf.get_y() - y0)
-            pdf.set_xy(x, y0)
-
-        for i in range(n):
-            x = x0 + sum(col_widths[:i])
-            pdf.rect(x, y0, col_widths[i], row_h)
-        pdf.set_y(y0 + row_h)
-
-    draw_row([str(c) for c in columns])
+    table_data: list[list[Paragraph]] = [[_para(str(c), bold=True, size=9) for c in columns]]
     for row in rows:
-        draw_row([_cell_text(col, row) for col in columns])
+        table_data.append([_para(_cell_text(col, row), size=8) for col in columns])
 
-    out = pdf.output()
-    data = bytes(out) if isinstance(out, (bytes, bytearray)) else out.encode("latin-1")
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("FONT", (0, 0), (-1, -1), _FONT_NAME, 8),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f2f4f6")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    story.append(table)
+    doc.build(story)
+
+    data = buf.getvalue()
     if not data.startswith(b"%PDF"):
         raise ValueError("PDF 생성에 실패했습니다.")
     return data

@@ -3,4 +3,5 @@ uvicorn[standard]>=0.32.0
 pydantic>=2.0.0
 httpx
 fpdf2
+reportlab>=4.0.0
 PyPDF2

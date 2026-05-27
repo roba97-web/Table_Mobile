@@ -1,4 +1,4 @@
-"""한글 PDF용 폰트 경로 (Windows·Linux·프로젝트 내 fonts/)."""
+"""한글 PDF용 폰트 경로 (TTF 우선, Android PDF 뷰어 호환)."""
 
 from __future__ import annotations
 
@@ -7,20 +7,19 @@ from pathlib import Path
 
 _FONT_DIR = Path(__file__).resolve().parent / "fonts"
 
-# 프로젝트 fonts/ 우선 — Render 등에서 시스템 .ttc 는 fpdf2 한글 깨짐 유발
+# TTF만 사용 — fpdf2/OTF/Type0(CID)는 Android 기본 PDF 뷰어에서 깨짐
 _FONT_CANDIDATES: tuple[str, ...] = (
+    str(_FONT_DIR / "NanumGothic-Regular.ttf"),
     str(_FONT_DIR / "NotoSansKR-Regular.ttf"),
-    str(_FONT_DIR / "NotoSansKR-Regular.otf"),
     str(_FONT_DIR / "malgun.ttf"),
     r"C:\Windows\Fonts\malgun.ttf",
     "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-    "/usr/share/fonts/truetype/noto/NotoSansKR-Regular.otf",
+    "/usr/share/fonts/truetype/nanum/NanumGothicRegular.ttf",
 )
 
 _FONT_ERROR = (
-    "한글 PDF 폰트를 찾을 수 없습니다. "
-    "로컬(Windows): 맑은 고딕 설치 · "
-    "배포(Streamlit Cloud): 저장소 루트에 packages.txt( fonts-noto-cjk ) 필요"
+    "한글 PDF 폰트(TTF)를 찾을 수 없습니다. "
+    "server/fonts/NanumGothic-Regular.ttf 가 포함되어 있는지 확인하세요."
 )
 
 
