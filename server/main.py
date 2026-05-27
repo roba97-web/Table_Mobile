@@ -176,81 +176,14 @@ def analyze_staff_tables(body: AnalyzeBody) -> dict:
     return {"columns": FINAL_COLUMNS, "rows": rows}
 
 
-def _to_int(value) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
-
-
-def _format_number(value) -> str:
-    n = _to_int(value)
-    if n == 0:
-        return "0"
-    return f"{n:,}"
-
-
-def _format_share_text(count: int, total: int) -> str:
-    if count == 0:
-        return "-"
-    if total <= 0:
-        return _format_number(count)
-    pct = count / total * 100
-    return f"{_format_number(count)}\n({pct:.1f})"
-
-
 @app.post("/api/result-pdf")
 def result_pdf(body: ResultPdfBody) -> dict:
     try:
-        from fpdf import FPDF
-        from fpdf.fonts import FontFace
-        from pdf_font import korean_font_path
+        from result_pdf import PDF_FILE_NAME, build_result_pdf_bytes
 
-        font_path = korean_font_path()
-        korean_face = FontFace(family="Korean", size_pt=9)
-
-        pdf = FPDF(orientation="L", unit="mm", format="A4")
-        pdf.set_margins(10, 10, 10)
-        pdf.set_auto_page_break(auto=True, margin=10)
-        pdf.add_page()
-        pdf.add_font("Korean", "", font_path)
-        pdf.set_font("Korean", size=11)
-        pdf.cell(0, 8, "통합 정원표 분석결과", new_x="LMARGIN", new_y="NEXT", align="C")
-        pdf.ln(2)
-        pdf.set_font("Korean", size=9)
-
-        columns = body.columns
-        col_widths = tuple(2 if col == "구분" else 1 for col in columns)
-        with pdf.table(
-            width=pdf.epw,
-            col_widths=col_widths,
-            line_height=5,
-            text_align="CENTER",
-            first_row_as_headings=False,
-            headings_style=korean_face,
-        ) as table:
-            header = table.row()
-            for col in columns:
-                header.cell(str(col))
-
-            for row in body.rows:
-                total = _to_int(row.get("총정원", 0))
-                data_row = table.row()
-                for col in columns:
-                    if col in RANK_COLS:
-                        text = _format_share_text(_to_int(row.get(col)), total)
-                    elif col in SUM_COLS:
-                        text = _format_number(row.get(col))
-                    else:
-                        text = str(row.get(col, ""))
-                    data_row.cell(text)
-
-        out = pdf.output()
-        data = bytes(out) if isinstance(out, (bytes, bytearray)) else out.encode("latin-1")
-        if not data.startswith(b"%PDF"):
-            raise ValueError("PDF 생성에 실패했습니다.")
+        data = build_result_pdf_bytes(body.columns, body.rows)
         return {
-            "file_name": "통합_정원표_분석결과.pdf",
+            "file_name": PDF_FILE_NAME,
             "pdf_base64": _b64(data),
         }
     except Exception as exc:

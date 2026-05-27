@@ -1,3 +1,4 @@
+import { File, Paths } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -5,6 +6,8 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 type ResultRow = Record<string, string | number>;
+
+const PDF_FILE_NAME = '통합_정원표_분석결과.pdf';
 
 const rawApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim() || 'http://127.0.0.1:8000';
 const API_URL = /^http:\/\/[^/:]+$/i.test(rawApiUrl)
@@ -39,17 +42,19 @@ export default function ResultScreen() {
     }
   }, [params.columns, params.rows]);
 
-  async function createPdfFile(directory: string | null) {
-    if (!directory) throw new Error('저장 폴더를 찾을 수 없습니다.');
+  async function createPdfFile() {
     const data = await api<{ file_name: string; pdf_base64: string }>('/api/result-pdf', {
       columns,
       rows,
     });
-    const uri = `${directory}${data.file_name}`;
-    await FileSystem.writeAsStringAsync(uri, data.pdf_base64, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    return { ...data, uri };
+    const fileName = data.file_name || PDF_FILE_NAME;
+    const file = new File(Paths.cache, fileName);
+    if (file.exists) file.delete();
+    file.create();
+    const raw = data.pdf_base64.replace(/\s/g, '');
+    const binary = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
+    file.write(binary);
+    return { file_name: fileName, uri: file.uri };
   }
 
   async function openResultPdf() {
@@ -61,7 +66,7 @@ export default function ResultScreen() {
     setLoading(true);
     setMessage('PDF 여는 중...');
     try {
-      const { uri } = await createPdfFile(FileSystem.cacheDirectory);
+      const { uri } = await createPdfFile();
       const contentUri = await FileSystem.getContentUriAsync(uri);
       await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
         data: contentUri,
@@ -80,24 +85,20 @@ export default function ResultScreen() {
     setLoading(true);
     setMessage('저장창 여는 중...');
     try {
-      const data = await api<{ file_name: string; pdf_base64: string }>('/api/result-pdf', {
-        columns,
-        rows,
-      });
+      const { file_name, uri } = await createPdfFile();
       const result = await IntentLauncher.startActivityAsync('android.intent.action.CREATE_DOCUMENT', {
         type: 'application/pdf',
         extra: {
-          'android.intent.extra.TITLE': data.file_name,
+          'android.intent.extra.TITLE': file_name,
         },
       });
       if (result.resultCode !== IntentLauncher.ResultCode.Success || !result.data) {
         setMessage('저장이 취소되었습니다.');
         return;
       }
-      await FileSystem.writeAsStringAsync(result.data, data.pdf_base64, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      const file_name = data.file_name;
+      const src = new File(uri);
+      const dest = new File(result.data);
+      dest.write(await src.bytes());
       setMessage(`저장 완료: ${file_name}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '저장 실패');
