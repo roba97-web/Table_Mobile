@@ -13,8 +13,8 @@ _FONT_CANDIDATES: tuple[str, ...] = (
     str(_FONT_DIR / "NotoSansKR-Regular.otf"),
     str(_FONT_DIR / "malgun.ttf"),
     r"C:\Windows\Fonts\malgun.ttf",
-    "/usr/share/fonts/truetype/noto/NotoSansKR-Regular.otf",
     "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansKR-Regular.otf",
 )
 
 _FONT_ERROR = (
