@@ -7,17 +7,14 @@ from pathlib import Path
 
 _FONT_DIR = Path(__file__).resolve().parent / "fonts"
 
-# Windows → Linux(Cloud) → 프로젝트 fonts/ 순
+# 프로젝트 fonts/ 우선 — Render 등에서 시스템 .ttc 는 fpdf2 한글 깨짐 유발
 _FONT_CANDIDATES: tuple[str, ...] = (
+    str(_FONT_DIR / "NotoSansKR-Regular.ttf"),
+    str(_FONT_DIR / "NotoSansKR-Regular.otf"),
+    str(_FONT_DIR / "malgun.ttf"),
     r"C:\Windows\Fonts\malgun.ttf",
-    r"C:\Windows\Fonts\gulim.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
     "/usr/share/fonts/truetype/noto/NotoSansKR-Regular.otf",
     "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-    str(_FONT_DIR / "NotoSansKR-Regular.otf"),
-    str(_FONT_DIR / "NotoSansKR-Regular.ttf"),
-    str(_FONT_DIR / "malgun.ttf"),
 )
 
 _FONT_ERROR = (

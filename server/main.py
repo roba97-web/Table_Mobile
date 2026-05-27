@@ -203,13 +203,17 @@ def _format_share_text(count: int, total: int) -> str:
 def result_pdf(body: ResultPdfBody) -> dict:
     try:
         from fpdf import FPDF
+        from fpdf.fonts import FontFace
         from pdf_font import korean_font_path
+
+        font_path = korean_font_path()
+        korean_face = FontFace(family="Korean", size_pt=9)
 
         pdf = FPDF(orientation="L", unit="mm", format="A4")
         pdf.set_margins(10, 10, 10)
         pdf.set_auto_page_break(auto=True, margin=10)
         pdf.add_page()
-        pdf.add_font("Korean", "", korean_font_path())
+        pdf.add_font("Korean", "", font_path)
         pdf.set_font("Korean", size=11)
         pdf.cell(0, 8, "통합 정원표 분석결과", new_x="LMARGIN", new_y="NEXT", align="C")
         pdf.ln(2)
@@ -223,6 +227,7 @@ def result_pdf(body: ResultPdfBody) -> dict:
             line_height=5,
             text_align="CENTER",
             first_row_as_headings=False,
+            headings_style=korean_face,
         ) as table:
             header = table.row()
             for col in columns:
@@ -242,6 +247,8 @@ def result_pdf(body: ResultPdfBody) -> dict:
 
         out = pdf.output()
         data = bytes(out) if isinstance(out, (bytes, bytearray)) else out.encode("latin-1")
+        if not data.startswith(b"%PDF"):
+            raise ValueError("PDF 생성에 실패했습니다.")
         return {
             "file_name": "통합_정원표_분석결과.pdf",
             "pdf_base64": _b64(data),
