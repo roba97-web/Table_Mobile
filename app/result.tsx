@@ -138,10 +138,16 @@ export default function ResultScreen() {
             <View key={index} style={styles.row}>
               {columns.map((col) => (
                 <View key={col} style={[styles.cell, columnStyle(col)]}>
-                  <Text style={styles.cellText}>{formatValue(row[col])}</Text>
-                  {showShare(col) ? (
-                    <Text style={styles.shareText}>({formatShare(row[col], row['총정원'])})</Text>
-                  ) : null}
+                  {col === '구분' ? (
+                    <Text style={styles.cellText}>{String(row[col] ?? '')}</Text>
+                  ) : (
+                    <>
+                      <Text style={styles.cellText}>{formatNumber(row[col])}</Text>
+                      {showShare(col) ? (
+                        <Text style={styles.shareText}>({formatShare(row[col], row['총정원'])})</Text>
+                      ) : null}
+                    </>
+                  )}
                 </View>
               ))}
             </View>
@@ -165,8 +171,10 @@ function toNumber(value: string | number | undefined) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function formatValue(value: string | number | undefined) {
-  return String(value ?? '');
+function formatNumber(value: string | number | undefined) {
+  const n = toNumber(value);
+  if (n === 0) return '0';
+  return n.toLocaleString('ko-KR');
 }
 
 function formatShare(value: string | number | undefined, totalValue: string | number | undefined) {

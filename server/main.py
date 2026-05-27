@@ -32,6 +32,7 @@ app.add_middleware(
 
 FINAL_COLUMNS = ["구분", "총정원", "정무직", "고공단", "3·4급", "4급", "4.5급", "5급이하"]
 SUM_COLS = ["총정원", "정무직", "고공단", "3·4급", "4급", "4.5급", "5급이하"]
+RANK_COLS = ["정무직", "고공단", "3·4급", "4급", "4.5급", "5급이하"]
 
 
 def _resolve_oc(override: str | None) -> str:
@@ -175,6 +176,29 @@ def analyze_staff_tables(body: AnalyzeBody) -> dict:
     return {"columns": FINAL_COLUMNS, "rows": rows}
 
 
+def _to_int(value) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _format_number(value) -> str:
+    n = _to_int(value)
+    if n == 0:
+        return "0"
+    return f"{n:,}"
+
+
+def _format_share_text(count: int, total: int) -> str:
+    if count == 0:
+        return "-"
+    if total <= 0:
+        return _format_number(count)
+    pct = count / total * 100
+    return f"{_format_number(count)}\n({pct:.1f})"
+
+
 @app.post("/api/result-pdf")
 def result_pdf(body: ResultPdfBody) -> dict:
     try:
@@ -187,22 +211,34 @@ def result_pdf(body: ResultPdfBody) -> dict:
         pdf.add_page()
         pdf.add_font("Korean", "", korean_font_path())
         pdf.set_font("Korean", size=11)
-        pdf.cell(0, 8, "통합 정원표 분석결과", ln=True)
-        pdf.ln(3)
+        pdf.cell(0, 8, "통합 정원표 분석결과", new_x="LMARGIN", new_y="NEXT", align="C")
+        pdf.ln(2)
+        pdf.set_font("Korean", size=9)
 
-        usable_width = pdf.w - pdf.l_margin - pdf.r_margin
-        col_width = usable_width / len(body.columns)
+        columns = body.columns
+        col_widths = tuple(2 if col == "구분" else 1 for col in columns)
+        with pdf.table(
+            width=pdf.epw,
+            col_widths=col_widths,
+            line_height=5,
+            text_align="CENTER",
+            first_row_as_headings=False,
+        ) as table:
+            header = table.row()
+            for col in columns:
+                header.cell(str(col))
 
-        pdf.set_font("Korean", size=8)
-        for col in body.columns:
-            pdf.cell(col_width, 8, col, border=1, align="C")
-        pdf.ln()
-
-        for row in body.rows:
-            for col in body.columns:
-                value = row.get(col, "")
-                pdf.cell(col_width, 8, str(value), border=1, align="C")
-            pdf.ln()
+            for row in body.rows:
+                total = _to_int(row.get("총정원", 0))
+                data_row = table.row()
+                for col in columns:
+                    if col in RANK_COLS:
+                        text = _format_share_text(_to_int(row.get(col)), total)
+                    elif col in SUM_COLS:
+                        text = _format_number(row.get(col))
+                    else:
+                        text = str(row.get(col, ""))
+                    data_row.cell(text)
 
         out = pdf.output()
         data = bytes(out) if isinstance(out, (bytes, bytearray)) else out.encode("latin-1")
