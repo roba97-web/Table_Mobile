@@ -7,7 +7,14 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, V
 
 type ResultRow = Record<string, string | number>;
 
-const PDF_FILE_NAME = '통합_정원표_분석결과.pdf';
+const PDF_FILE_BASE_NAME = '통합_정원표_분석결과';
+
+function makePdfFileName() {
+  // 같은 파일명을 반복해서 덮어쓰면 Android PDF 뷰어가 캐시된 이전 내용을 보여줄 수 있어,
+  // 매번 파일명을 다르게 만들어 URI가 바뀌도록 합니다.
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  return `${PDF_FILE_BASE_NAME}_${ts}.pdf`;
+}
 
 const rawApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim() || 'http://127.0.0.1:8000';
 const API_URL = /^http:\/\/[^/:]+$/i.test(rawApiUrl)
@@ -47,7 +54,7 @@ export default function ResultScreen() {
       columns,
       rows,
     });
-    const fileName = data.file_name || PDF_FILE_NAME;
+    const fileName = makePdfFileName();
     const file = new File(Paths.cache, fileName);
     if (file.exists) file.delete();
     file.create();
