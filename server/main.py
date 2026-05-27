@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -11,15 +12,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-AI_TEST_ROOT = Path(__file__).resolve().parent.parent.parent / "AI-Test"
-if not AI_TEST_ROOT.is_dir():
-    raise RuntimeError(f"AI-Test 폴더를 찾을 수 없습니다: {AI_TEST_ROOT}")
-if str(AI_TEST_ROOT) not in sys.path:
-    sys.path.insert(0, str(AI_TEST_ROOT))
+SERVER_ROOT = Path(__file__).resolve().parent
+if str(SERVER_ROOT) not in sys.path:
+    sys.path.insert(0, str(SERVER_ROOT))
 
 from law_center import DEFAULT_LAW_NAME, LawCenterError, fetch_law_bundle  # noqa: E402
 from org_list import build_org_dropdown_options  # noqa: E402
-from pdf_select import build_staff_table_items  # noqa: E402
 from staff_table_fetch import fetch_all_staff_tables_for_org  # noqa: E402
 from table_analyze import analyze_staff_table_pdf  # noqa: E402
 
@@ -58,6 +56,27 @@ def _from_b64(value: str) -> bytes:
         return base64.b64decode(value, validate=True)
     except Exception as exc:
         raise HTTPException(status_code=400, detail="잘못된 PDF 데이터입니다.") from exc
+
+
+def build_staff_table_items(pdfs: list) -> list[dict]:
+    items: list[dict] = []
+    seen_hash: set[str] = set()
+    for item in pdfs:
+        pdf_hash = hashlib.md5(item.pdf_bytes).hexdigest()
+        is_duplicate = pdf_hash in seen_hash
+        seen_hash.add(pdf_hash)
+        items.append(
+            {
+                "pdf_bytes": item.pdf_bytes,
+                "file_name": item.file_name,
+                "law_name": item.law_name,
+                "form_title": item.form_title,
+                "lsi_seq": item.lsi_seq,
+                "pdf_hash": pdf_hash,
+                "is_duplicate": is_duplicate,
+            }
+        )
+    return items
 
 
 class OcBody(BaseModel):
