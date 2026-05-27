@@ -137,9 +137,12 @@ export default function ResultScreen() {
           {rows.map((row, index) => (
             <View key={index} style={styles.row}>
               {columns.map((col) => (
-                <Text key={col} style={[styles.cell, columnStyle(col)]}>
-                  {String(row[col] ?? '')}
-                </Text>
+                <View key={col} style={[styles.cell, columnStyle(col)]}>
+                  <Text style={styles.cellText}>{formatValue(row[col])}</Text>
+                  {showShare(col) ? (
+                    <Text style={styles.shareText}>({formatShare(row[col], row['총정원'])})</Text>
+                  ) : null}
+                </View>
               ))}
             </View>
           ))}
@@ -151,6 +154,25 @@ export default function ResultScreen() {
 
 function columnStyle(col: string) {
   return col === '구분' ? styles.labelCell : styles.numberCell;
+}
+
+function showShare(col: string) {
+  return col !== '구분' && col !== '총정원';
+}
+
+function toNumber(value: string | number | undefined) {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatValue(value: string | number | undefined) {
+  return String(value ?? '');
+}
+
+function formatShare(value: string | number | undefined, totalValue: string | number | undefined) {
+  const total = toNumber(totalValue);
+  if (!total) return '0.0';
+  return ((toNumber(value) / total) * 100).toFixed(1);
 }
 
 const styles = StyleSheet.create({
@@ -211,9 +233,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     padding: 8,
-    textAlign: 'center',
     minHeight: 46,
-    textAlignVertical: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cellText: {
+    textAlign: 'center',
+  },
+  shareText: {
+    marginTop: 2,
+    fontSize: 11,
+    color: '#666',
+    textAlign: 'center',
   },
   labelCell: {
     width: 180,
